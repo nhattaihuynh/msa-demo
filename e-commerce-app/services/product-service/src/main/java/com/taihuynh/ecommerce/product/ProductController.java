@@ -39,4 +39,9 @@ public class ProductController {
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/purchase")
+    public ResponseEntity<List<ProductPurchaseResponse>> purchaseProduct(@RequestBody List<ProductPurchaseRequest> requests) {
+        return ResponseEntity.ok(productService.purchaseProduct(requests));
+    }
 }
