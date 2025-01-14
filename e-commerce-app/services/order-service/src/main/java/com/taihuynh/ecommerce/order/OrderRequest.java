@@ -7,7 +7,7 @@ import java.util.List;
 
 public record OrderRequest(
     String id,
-    Integer customerId,
+    String customerId,
     String reference,
     BigDecimal amount,
     PaymentMethod paymentMethod,

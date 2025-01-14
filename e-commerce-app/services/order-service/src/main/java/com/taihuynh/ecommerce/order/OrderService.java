@@ -1,42 +1,42 @@
 package com.taihuynh.ecommerce.order;
 
+import com.taihuynh.ecommerce.customer.CustomerClient;
+import com.taihuynh.ecommerce.exception.BusinessException;
+import com.taihuynh.ecommerce.product.ProductClient;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
 import java.math.BigDecimal;
 
 @Service
 public class OrderService {
     
-    private final OrderRepository orderRepository;
-    private final RestTemplate restTemplate;
-    private final String customerUrl;
-    private final String productUrl;
+    private final CustomerClient customerClient;
 
-    public OrderService(
-            OrderRepository orderRepository,
-            RestTemplate restTemplate,
-            @Value("${application.config.customer-url}") String customerUrl,
-            @Value("${application.config.product-url}") String productUrl) {
-        this.orderRepository = orderRepository;
-        this.restTemplate = restTemplate;
-        this.customerUrl = customerUrl;
-        this.productUrl = productUrl;
+    private final ProductClient productClient;
+
+    public OrderService(CustomerClient customerClient, ProductClient productClient) {
+        this.customerClient = customerClient;
+        this.productClient = productClient;
     }
+
 
     public OrderResponse createOrder(OrderRequest orderRequest) {
         // Validate customer exists
-        validateCustomer(orderRequest.customerId());
+        var customer = customerClient.getCustomer(orderRequest.customerId()).orElseThrow(
+                () -> new BusinessException("Customer not found with id: " + orderRequest.customerId())
+        );
+
+        // purchase the products
+
+        // persist order
+
+        // persist order line
+
+        // start payment process
+
+        // send notification to kafka
         
-        // Validate and reserve products
-        validateAndReserveProducts(orderRequest.orderLines());
-        
-        // Create order entity and save
-        Order order = mapToOrder(orderRequest);
-        Order savedOrder = orderRepository.save(order);
-        
-        return mapToOrderResponse(savedOrder);
+        return null;
     }
 
     public OrderResponse getOrder(Integer id) {
