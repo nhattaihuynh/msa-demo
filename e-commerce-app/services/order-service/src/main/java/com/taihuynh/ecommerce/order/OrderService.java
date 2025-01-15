@@ -2,10 +2,15 @@ package com.taihuynh.ecommerce.order;
 
 import com.taihuynh.ecommerce.customer.CustomerClient;
 import com.taihuynh.ecommerce.exception.BusinessException;
+import com.taihuynh.ecommerce.orderline.OrderLineService;
 import com.taihuynh.ecommerce.product.ProductClient;
+import com.taihuynh.ecommerce.product.PurchaseRequest;
+import com.taihuynh.ecommerce.product.PurchaseResponse;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.math.BigDecimal;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
@@ -14,11 +19,25 @@ public class OrderService {
 
     private final ProductClient productClient;
 
-    public OrderService(CustomerClient customerClient, ProductClient productClient) {
+    private final OrderRepository orderRepository;
+
+    private final OrderMapper orderMapper;
+
+    private final OrderLineService orderLineService;
+
+    private final Logger log = Logger.getLogger(OrderService.class.getName());
+
+    public OrderService(CustomerClient customerClient, 
+                       ProductClient productClient, 
+                       OrderRepository orderRepository,
+                       OrderMapper orderMapper,
+                       OrderLineService orderLineService) {
         this.customerClient = customerClient;
         this.productClient = productClient;
+        this.orderRepository = orderRepository;
+        this.orderMapper = orderMapper;
+        this.orderLineService = orderLineService;
     }
-
 
     public OrderResponse createOrder(OrderRequest orderRequest) {
         // Validate customer exists
@@ -26,178 +45,71 @@ public class OrderService {
                 () -> new BusinessException("Customer not found with id: " + orderRequest.customerId())
         );
 
-        // purchase the products
+        // Purchase the products and get product details
+        var purchasedProducts = productClient.purchaseProducts(orderRequest.products());
 
-        // persist order
+        // Create and save the order
+        var order = orderRepository.save(orderMapper.mapToOrder(orderRequest));
 
-        // persist order line
+        // Create and save order lines
+        for (PurchaseResponse product : purchasedProducts) {
+            orderLineService.saveOrderLine(order, product.productId(), product.quantity());
+        }
 
-        // start payment process
+        // Start payment process (can be implemented later with payment service)
+        // For now, just set the order status to PENDING
 
-        // send notification to kafka
+        // Send notification to kafka (can be implemented later with kafka producer)
+        // For now, just log the order creation
+        log.info("Order created with ID: {}", order.getId());
         
-        return null;
+        // Fetch the complete order with order lines
+        var savedOrder = orderRepository.findById(order.getId())
+                .orElseThrow(() -> new BusinessException("Order not found after creation"));
+        
+        return mapToOrderResponse(savedOrder);
     }
 
     public OrderResponse getOrder(Integer id) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
+        var order = orderRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Order not found with id: " + id));
         return mapToOrderResponse(order);
     }
 
     public List<OrderResponse> getAllOrders() {
         return orderRepository.findAll().stream()
                 .map(this::mapToOrderResponse)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     public List<OrderResponse> getOrdersByCustomer(Integer customerId) {
-        validateCustomer(customerId);
         return orderRepository.findByCustomerId(customerId).stream()
                 .map(this::mapToOrderResponse)
-                .toList();
-    }
-
-    public OrderResponse updateOrder(Integer id, OrderRequest orderRequest) {
-        Order existingOrder = orderRepository.findById(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
-        
-        // Only allow updates if order is in PENDING state
-        if (existingOrder.getStatus() != OrderStatus.PENDING) {
-            throw new IllegalStateException("Can only update orders in PENDING state");
-        }
-        
-        validateCustomer(orderRequest.customerId());
-        validateAndReserveProducts(orderRequest.orderLines());
-        
-        // Update order
-        Order updatedOrder = mapToOrder(orderRequest);
-        updatedOrder.setId(id);
-        updatedOrder = orderRepository.save(updatedOrder);
-        
-        return mapToOrderResponse(updatedOrder);
-    }
-
-    public void deleteOrder(Integer id) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
-        
-        // Only allow deletion if order is in PENDING state
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new IllegalStateException("Can only delete orders in PENDING state");
-        }
-        
-        orderRepository.delete(order);
-    }
-
-    public OrderResponse updateOrderStatus(Integer id, OrderStatusRequest statusRequest) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
-        
-        // Validate status transition
-        validateStatusTransition(order.getStatus(), statusRequest.status());
-        
-        order.setStatus(statusRequest.status());
-        Order updatedOrder = orderRepository.save(order);
-        
-        return mapToOrderResponse(updatedOrder);
-    }
-
-    private void validateCustomer(Integer customerId) {
-        try {
-            restTemplate.getForObject(customerUrl + "/" + customerId, Object.class);
-        } catch (Exception e) {
-            throw new CustomerNotFoundException("Customer not found with id: " + customerId);
-        }
-    }
-
-    private void validateAndReserveProducts(List<OrderLineRequest> orderLines) {
-        for (OrderLineRequest line : orderLines) {
-            try {
-                // Call product service to validate and reserve
-                restTemplate.postForObject(
-                    productUrl + "/purchase",
-                    new ProductPurchaseRequest(line.productId(), line.quantity()),
-                    Object.class
-                );
-            } catch (Exception e) {
-                throw new ProductValidationException("Failed to validate/reserve product: " + line.productId());
-            }
-        }
-    }
-
-    private void validateStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
-        // Implement status transition validation logic
-        // Example: Can't move from DELIVERED to PROCESSING
-        if (currentStatus == OrderStatus.DELIVERED && 
-            (newStatus == OrderStatus.PROCESSING || newStatus == OrderStatus.CONFIRMED)) {
-            throw new IllegalStateException("Invalid status transition from " + currentStatus + " to " + newStatus);
-        }
-        // Add more transition rules as needed
-    }
-
-    private Order mapToOrder(OrderRequest request) {
-        Order order = new Order();
-        order.setCustomerId(request.customerId());
-        order.setShippingAddress(request.shippingAddress());
-        order.setPaymentMethod(request.paymentMethod());
-        order.setStatus(OrderStatus.PENDING);
-        
-        List<OrderLine> orderLines = request.orderLines().stream()
-            .map(this::mapToOrderLine)
-            .toList();
-        order.setOrderLines(orderLines);
-        
-        return order;
-    }
-
-    private OrderLine mapToOrderLine(OrderLineRequest request) {
-        // Get product details from product service
-        ProductResponse product = restTemplate.getForObject(
-            productUrl + "/" + request.productId(),
-            ProductResponse.class
-        );
-        
-        OrderLine orderLine = new OrderLine();
-        orderLine.setProductId(request.productId());
-        orderLine.setQuantity(request.quantity());
-        orderLine.setProductName(product.name());
-        orderLine.setUnitPrice(product.price());
-        orderLine.setSubtotal(product.price().multiply(BigDecimal.valueOf(request.quantity())));
-        
-        return orderLine;
+                .collect(Collectors.toList());
     }
 
     private OrderResponse mapToOrderResponse(Order order) {
+        var orderLines = order.getOrderLines().stream()
+                .map(line -> new OrderLineResponse(
+                        line.getId(),
+                        line.getProductId(),
+                        null, // Product name will be fetched from product service if needed
+                        line.getQuantity(),
+                        null, // Unit price will be fetched from product service if needed
+                        null  // Subtotal will be calculated if needed
+                ))
+                .collect(Collectors.toList());
+
         return new OrderResponse(
-            order.getId(),
-            order.getCustomerId(),
-            mapToOrderLineResponses(order.getOrderLines()),
-            calculateTotalAmount(order.getOrderLines()),
-            order.getShippingAddress(),
-            order.getPaymentMethod(),
-            order.getStatus(),
-            order.getCreatedAt(),
-            order.getUpdatedAt()
+                order.getId(),
+                order.getCustomerId(),
+                orderLines,
+                order.getTotalAmount(),
+                null, // Shipping address can be added later
+                order.getPaymentMethod().toString(),
+                OrderStatus.PENDING,
+                order.getCreatedAt(),
+                order.getUpdatedAt()
         );
-    }
-
-    private List<OrderLineResponse> mapToOrderLineResponses(List<OrderLine> orderLines) {
-        return orderLines.stream()
-            .map(line -> new OrderLineResponse(
-                line.getId(),
-                line.getProductId(),
-                line.getProductName(),
-                line.getQuantity(),
-                line.getUnitPrice(),
-                line.getSubtotal()
-            ))
-            .toList();
-    }
-
-    private BigDecimal calculateTotalAmount(List<OrderLine> orderLines) {
-        return orderLines.stream()
-            .map(OrderLine::getSubtotal)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }
