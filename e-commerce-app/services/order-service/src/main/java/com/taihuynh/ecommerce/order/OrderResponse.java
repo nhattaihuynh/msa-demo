@@ -6,12 +6,9 @@ import java.util.List;
 
 public record OrderResponse(
     Integer id,
-    Integer customerId,
+    String customerId,
     List<OrderLineResponse> orderLines,
     BigDecimal totalAmount,
-    String shippingAddress,
     String paymentMethod,
-    OrderStatus status,
-    LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime createdAt
 ) {}

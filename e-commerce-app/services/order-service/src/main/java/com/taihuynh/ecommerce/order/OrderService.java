@@ -2,13 +2,11 @@ package com.taihuynh.ecommerce.order;
 
 import com.taihuynh.ecommerce.customer.CustomerClient;
 import com.taihuynh.ecommerce.exception.BusinessException;
+import com.taihuynh.ecommerce.kafka.OrderKafkaProducer;
 import com.taihuynh.ecommerce.orderline.OrderLineService;
 import com.taihuynh.ecommerce.product.ProductClient;
-import com.taihuynh.ecommerce.product.PurchaseRequest;
 import com.taihuynh.ecommerce.product.PurchaseResponse;
 import org.springframework.stereotype.Service;
-import java.util.List;
-import java.math.BigDecimal;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -25,18 +23,22 @@ public class OrderService {
 
     private final OrderLineService orderLineService;
 
+    private final OrderKafkaProducer kafkaProducer;
+
     private final Logger log = Logger.getLogger(OrderService.class.getName());
 
     public OrderService(CustomerClient customerClient, 
                        ProductClient productClient, 
                        OrderRepository orderRepository,
                        OrderMapper orderMapper,
-                       OrderLineService orderLineService) {
+                       OrderLineService orderLineService,
+                       OrderKafkaProducer kafkaProducer) {
         this.customerClient = customerClient;
         this.productClient = productClient;
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderLineService = orderLineService;
+        this.kafkaProducer = kafkaProducer;
     }
 
     public OrderResponse createOrder(OrderRequest orderRequest) {
@@ -56,36 +58,17 @@ public class OrderService {
             orderLineService.saveOrderLine(order, product.productId(), product.quantity());
         }
 
-        // Start payment process (can be implemented later with payment service)
-        // For now, just set the order status to PENDING
-
-        // Send notification to kafka (can be implemented later with kafka producer)
-        // For now, just log the order creation
-        log.info("Order created with ID: {}", order.getId());
-        
         // Fetch the complete order with order lines
         var savedOrder = orderRepository.findById(order.getId())
                 .orElseThrow(() -> new BusinessException("Order not found after creation"));
         
-        return mapToOrderResponse(savedOrder);
-    }
-
-    public OrderResponse getOrder(Integer id) {
-        var order = orderRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Order not found with id: " + id));
-        return mapToOrderResponse(order);
-    }
-
-    public List<OrderResponse> getAllOrders() {
-        return orderRepository.findAll().stream()
-                .map(this::mapToOrderResponse)
-                .collect(Collectors.toList());
-    }
-
-    public List<OrderResponse> getOrdersByCustomer(Integer customerId) {
-        return orderRepository.findByCustomerId(customerId).stream()
-                .map(this::mapToOrderResponse)
-                .collect(Collectors.toList());
+        var orderResponse = mapToOrderResponse(savedOrder);
+        
+        // Send order created event to Kafka
+        kafkaProducer.sendOrderCreatedEvent(orderResponse);
+        log.info("Order created event sent to Kafka for order ID: " + orderResponse.id());
+        
+        return orderResponse;
     }
 
     private OrderResponse mapToOrderResponse(Order order) {
@@ -105,11 +88,8 @@ public class OrderService {
                 order.getCustomerId(),
                 orderLines,
                 order.getTotalAmount(),
-                null, // Shipping address can be added later
-                order.getPaymentMethod().toString(),
-                OrderStatus.PENDING,
-                order.getCreatedAt(),
-                order.getUpdatedAt()
+                "",
+                order.getCreatedAt()
         );
     }
 }
