@@ -3,6 +3,8 @@ package com.taihuynh.ecommerce.order;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
@@ -16,5 +18,10 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest orderRequest) {
         return ResponseEntity.ok(orderService.createOrder(orderRequest));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<OrderResponse>> findAll() {
+        return ResponseEntity.ok(orderService.findAll());
     }
 }

@@ -2,11 +2,13 @@ package com.taihuynh.ecommerce.order;
 
 import com.taihuynh.ecommerce.customer.CustomerClient;
 import com.taihuynh.ecommerce.exception.BusinessException;
-import com.taihuynh.ecommerce.kafka.OrderKafkaProducer;
+import com.taihuynh.ecommerce.kafka.OrderConfirmation;
+import com.taihuynh.ecommerce.kafka.OrderProducer;
 import com.taihuynh.ecommerce.orderline.OrderLineService;
 import com.taihuynh.ecommerce.product.ProductClient;
 import com.taihuynh.ecommerce.product.PurchaseResponse;
 import org.springframework.stereotype.Service;
+import java.util.List;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -23,22 +25,21 @@ public class OrderService {
 
     private final OrderLineService orderLineService;
 
-    private final OrderKafkaProducer kafkaProducer;
+    private final OrderProducer orderProducer;
 
     private final Logger log = Logger.getLogger(OrderService.class.getName());
 
-    public OrderService(CustomerClient customerClient, 
-                       ProductClient productClient, 
-                       OrderRepository orderRepository,
-                       OrderMapper orderMapper,
-                       OrderLineService orderLineService,
-                       OrderKafkaProducer kafkaProducer) {
+    public OrderService(CustomerClient customerClient,
+                        ProductClient productClient,
+                        OrderRepository orderRepository,
+                        OrderMapper orderMapper,
+                        OrderLineService orderLineService, OrderProducer orderProducer) {
         this.customerClient = customerClient;
         this.productClient = productClient;
         this.orderRepository = orderRepository;
         this.orderMapper = orderMapper;
         this.orderLineService = orderLineService;
-        this.kafkaProducer = kafkaProducer;
+        this.orderProducer = orderProducer;
     }
 
     public OrderResponse createOrder(OrderRequest orderRequest) {
@@ -65,10 +66,25 @@ public class OrderService {
         var orderResponse = mapToOrderResponse(savedOrder);
         
         // Send order created event to Kafka
-        kafkaProducer.sendOrderCreatedEvent(orderResponse);
-        log.info("Order created event sent to Kafka for order ID: " + orderResponse.id());
+        orderProducer.sendOrderConfirmation(
+                new OrderConfirmation(
+                    orderRequest.reference(),
+                    orderRequest.amount(),
+                    orderRequest.paymentMethod(),
+                    customer,
+                    purchasedProducts
+                )
+        );
+        // todo: start payment process
         
         return orderResponse;
+    }
+
+    public List<OrderResponse> findAll() {
+        return orderRepository.findAll()
+                .stream()
+                .map(orderMapper::toResponse)
+                .collect(Collectors.toList());
     }
 
     private OrderResponse mapToOrderResponse(Order order) {

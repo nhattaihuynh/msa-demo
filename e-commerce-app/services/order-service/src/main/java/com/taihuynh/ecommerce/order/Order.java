@@ -32,6 +32,9 @@ public class Order {
     private PaymentMethod paymentMethod;
     private String customerId;
 
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status = OrderStatus.PENDING;
+
     @OneToMany(mappedBy = "order")
     private List<OrderLine> orderLines;
 
@@ -41,4 +44,9 @@ public class Order {
 
     @Column(name = "last_modified_at", insertable = false)
     private LocalDateTime lastModifiedAt;
+}
+
+enum OrderStatus {
+    PENDING,
+    // Add other statuses as needed
 }
