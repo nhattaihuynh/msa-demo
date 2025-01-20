@@ -1,7 +1,9 @@
 package com.taihuynh.ecommerce.orderline;
 
 import com.taihuynh.ecommerce.order.Order;
+import com.taihuynh.ecommerce.exception.BusinessException;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 @Service
 public class OrderLineService {
@@ -23,6 +25,21 @@ public class OrderLineService {
 
     public OrderLine getOrderLine(Integer id) {
         return orderLineRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("OrderLine not found with id: " + id));
+                .orElseThrow(() -> new BusinessException("OrderLine not found with id: " + id));
+    }
+
+    public List<OrderLine> findAll() {
+        return orderLineRepository.findAll();
+    }
+
+    public List<OrderLine> findByOrderId(Integer orderId) {
+        return orderLineRepository.findByOrderId(orderId);
+    }
+
+    public void deleteOrderLine(Integer id) {
+        if (!orderLineRepository.existsById(id)) {
+            throw new BusinessException("OrderLine not found with id: " + id);
+        }
+        orderLineRepository.deleteById(id);
     }
 }

@@ -87,6 +87,12 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    public OrderResponse findById(Integer id) {
+        return orderRepository.findById(id)
+                .map(this::mapToOrderResponse)
+                .orElseThrow(() -> new BusinessException("Order not found with id: " + id));
+    }
+
     private OrderResponse mapToOrderResponse(Order order) {
         var orderLines = order.getOrderLines().stream()
                 .map(line -> new OrderLineResponse(
