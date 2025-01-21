@@ -10,9 +10,9 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     
-    public PaymentResponse createPayment(PaymentRequest request) {
+    public Integer createPayment(PaymentRequest request) {
         Payment payment = paymentMapper.toEntity(request);
         Payment savedPayment = paymentRepository.save(payment);
-        return paymentMapper.toResponse(savedPayment);
+        return null;
     }
 }
