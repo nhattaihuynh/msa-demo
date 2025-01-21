@@ -1,0 +1,10 @@
+package com.taihuynh.ecommerce.notification;
+
+import java.math.BigDecimal;
+
+public record PaymentNotificationRequest(
+        String orderReference,
+        BigDecimal amount,
+        
+) {
+}
