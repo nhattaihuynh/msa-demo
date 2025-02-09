@@ -1,7 +1,5 @@
 package com.taihuynh.ecommerce.notification;
 
-import com.taihuynh.ecommerce.kafka.order.OrderConfirmation;
-import com.taihuynh.ecommerce.kafka.payment.PaymentConfirmation;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
