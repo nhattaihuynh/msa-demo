@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/order
+    url: jdbc:postgresql://localhost:5432/payment
     username: taihuynh
     password: taihuynh
     driver-class-name: org.postgresql.Driver
@@ -16,12 +16,7 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        spring.json.type.mapping: orderConfirmation:com.taihuynh.ecommerce.kafka.OrderConfirmation
-server:
-  port: 8070
+        spring.json.type.mapping: paymentConfirmation:com.taihuynh.ecommerce.kafka.PaymentNotificationRequest
 
-application:
-  config:
-    customer-url: http://localhost:8090/api/v1/customers
-    product-url: http://localhost:8050/api/v1/products
-    payment-url: http://localhost:8060/api/v1/payments
+server:
+  port: 8060
